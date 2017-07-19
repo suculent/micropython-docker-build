@@ -1,5 +1,6 @@
 FROM ubuntu:trusty
 ARG VERSION=master
+MAINTAINER suculent
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -16,13 +17,9 @@ RUN git clone --recursive https://github.com/pfalcon/esp-open-sdk.git \
   && git clone https://github.com/micropython/micropython.git \
   && cd micropython && git checkout $VERSION && git submodule update --init \
   && chown -R micropython:micropython ../esp-open-sdk ../micropython
-
+  
 USER micropython
 
-RUN cd esp-open-sdk && make STANDALONE=y
+COPY cmd.sh /opt/
 
-ENV PATH=/esp-open-sdk/xtensa-lx106-elf/bin:$PATH
-
-RUN cd micropython/mpy-cross && make
-
-RUN cd micropython/esp8266 && make axtls && make
+CMD /opt/cmd.sh
