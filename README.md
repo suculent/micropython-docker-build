@@ -2,6 +2,8 @@ Micropython on ESP8266
 ======================
 The repository provides a `Dockerfile` to build the [Micropython](https://micropython.org/) firmware for [ESP8266](https://en.wikipedia.org/wiki/ESP8266) boards.
 
+Based on [THiNX OpenSource IoT management platform](https://thinx.cloud).
+
 ***Warning***: The binary works on Ubuntu 14:04 and the build is based on Ubuntu 14:04
 
 Build Instructions
