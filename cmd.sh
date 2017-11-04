@@ -42,4 +42,6 @@ if [[ ! -z ${micropython_modules[@]} ]]; then
   popd
 fi
 
+# Will probably build both firmwares and builder.sh must choose based on thinx.yml on deployment...
+
 make axtls && make
