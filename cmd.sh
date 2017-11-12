@@ -45,3 +45,10 @@ fi
 # Will probably build both firmwares and builder.sh must choose based on thinx.yml on deployment...
 
 make axtls && make
+
+# Report build status using logfile
+if [[ $? == 0 ]]; then
+  echo "THiNX BUILD SUCCESSFUL."
+else
+  echo "THiNX BUILD FAILED: $?"
+fi
