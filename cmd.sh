@@ -46,8 +46,12 @@ fi
 
 make axtls && make
 
+RESULT=$?
+
+echo ""
+
 # Report build status using logfile
-if [[ $? == 0 ]]; then
+if [[ $RESULT == 0 ]]; then
   echo "THiNX BUILD SUCCESSFUL."
 else
   echo "THiNX BUILD FAILED: $?"
