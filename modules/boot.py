@@ -42,9 +42,9 @@ THINX_API_PORT = 7442
 # TODO: HTTPS proxy support
 # TODO: convert to thinx module
 
-# Required parameters
-SSID = '6RA'
-PASSWORD = 'quarantine'
+# Required parameters (enter your WiFi SSID and password)
+SSID = 'THiNX-IoT'
+PASSWORD = '<enter-your-ssid-password>'
 TIMEOUT = 180
 
 import urequests
@@ -204,10 +204,9 @@ def process_thinx_response(response):
 
     try:
         upd = response['update']
-        if upd:
-            if thinx_update():
-                if THINX_AUTO_UPDATE:
-                    print("TODO: Update boot.py") # https://github.com/pfalcon/yaota8266 - ota_server: step 4 only...
+        if THINX_AUTO_UPDATE && upd:
+            thinx_update(upd)
+            print("TODO: Update boot.py") # https://github.com/pfalcon/yaota8266 - ota_server: step 4 only...
 
     except Exception:
         print("THiNX: No update key found.")
