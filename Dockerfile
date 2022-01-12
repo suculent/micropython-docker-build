@@ -1,6 +1,6 @@
-FROM ubuntu:trusty
+FROM ubuntu:focal
 ARG VERSION=master
-MAINTAINER suculent
+LABEL maintainer="Matej Sychra <suculent@me.com>"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
