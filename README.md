@@ -72,5 +72,5 @@ make
 make PORT=/dev/ttyUSB0 erase deploy
 ```
 
-
 Here `${SERIAL_PORT}` is the path to the serial device on which the board is connected, generally is equal to /dev/ttyUSB0.
+
