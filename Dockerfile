@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:20.04
 ARG VERSION=master
 LABEL maintainer="Matej Sychra <suculent@me.com>"
 
