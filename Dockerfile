@@ -1,4 +1,4 @@
-FROM ubuntu:26.04
+FROM ubuntu:20.04
 ARG VERSION=master
 LABEL maintainer="Matej Sychra <suculent@me.com>"
 
