@@ -8,7 +8,11 @@ jobs:
     executor: docker/docker
     steps:
       - setup_remote_docker
-      - checkout
+      - run:
+          name: Checkout (HTTPS, public repo)
+          command: |
+            git clone "https://github.com/suculent/micropython-docker-build.git" .
+            git checkout "${CIRCLE_SHA1}" || echo "SHA not found; using default branch"
       - docker/check
       - docker/build:
           image: suculent/micropython-docker-build
