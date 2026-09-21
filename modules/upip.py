@@ -169,7 +169,8 @@ def install_pkg(pkg_spec, install_path):
     packages = data["releases"][latest_ver]
     del data
     gc.collect()
-    assert len(packages) == 1
+    if len(packages) != 1:
+        raise AssertionError
     package_url = packages[0]["url"]
     print("Installing %s %s from %s" % (pkg_spec, latest_ver, package_url))
     package_fname = op_basename(package_url)
