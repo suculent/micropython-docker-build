@@ -24,8 +24,8 @@
 # CMD_SH=/path/to/cmd.sh tests another copy.
 
 # Names cmd.sh reads after loading thinx.yml.
-# micropython_modules is a list: cmd.sh expands ${micropython_modules[@]}, so
-# it arrives as its items joined with a space.
+# micropython_modules is a list: cmd.sh splits it into words, so it arrives
+# as its items joined with a space.
 NAMES="micropython_platform micropython_modules"
 # Names thinx.yml carries that cmd.sh does not read; they must stay unset.
 UNREAD="devsec_ssid devsec_pass devsec_ckey micropython micropython_build_type"

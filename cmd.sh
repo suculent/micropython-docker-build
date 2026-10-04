@@ -29,12 +29,12 @@ set -e
 #    or multi-line quoted scalar) or holds a control character other than
 #    tab (NUL included) is rejected; its variable is left as it was.
 # A list item (`- item` under a key) appended to a bash array in the sibling
-# images' parse_yaml. micropython_modules is read as ${micropython_modules[@]},
-# so a list item appends to it after a space: modules: with the items "- A"
-# and "- B" gives "A B", which ${name[@]} expands to the same words the array
-# would. micropython_platform is read as ${micropython_platform}, the array's
-# first element, so a list item only sets it while it has no value yet. A
-# plain key value replaces either, as `name=(...)` did.
+# images' parse_yaml. micropython_modules is a word list (keep_module below
+# splits it), so a list item appends to it after a space: modules: with the
+# items "- A" and "- B" gives "A B", the same words the array held.
+# micropython_platform is read as ${micropython_platform}, the array's first
+# element, so a list item only sets it while it has no value yet. A plain key
+# value replaces either, as `name=(...)` did.
 #
 # Same awk as thinx_yml_load in the THiNX worker (services/worker/builder-lib.sh)
 # and the arduino, platformio and nodemcu builder images; keep them in step.
@@ -152,56 +152,156 @@ THINX_YML_PAIRS
 	return 0
 }
 
-cd esp-open-sdk && make STANDALONE=y
+# --- build --------------------------------------------------------------------
+#
+# Contract with the THiNX worker (services/worker, builder-lib.sh upy_build;
+# see README.md, "THiNX worker contract"):
+#  - the repository is mounted at /opt/workspace, and the image runs its
+#    default CMD (this script) as the micropython user;
+#  - thinx.yml is read only through thinx_yml_load above:
+#      micropython.platform  esp8266 (the default) is the only platform this
+#                            image has a toolchain for; anything else fails;
+#      micropython.modules   the port's own modules to keep (a list, or one
+#                            space-separated string); without it all are kept.
+#                            _boot.py, flashbdev.py and inisetup.py are always
+#                            kept: _boot.py mounts the filesystem with them;
+#  - every *.py in the repository root, then in its modules/ directory, is
+#    copied into the port's modules directory, which the build freezes into
+#    the firmware (modules/x.py wins over x.py). Symlinks and names that are
+#    not importable (e.g. "thinx copy.py") are skipped;
+#  - the image goes to /opt/workspace/build/firmware.bin. The worker creates
+#    build/ writable for this user and deploys the file; it also checks the
+#    size, this script does not;
+#  - the last line is "THiNX BUILD SUCCESSFUL." with exit status 0, or
+#    "THiNX BUILD FAILED: <status>" with a non-zero one, and no firmware.bin.
+#
+# WORKSPACE, SDK_DIR and MPY_DIR exist for tests/cmd-build.sh; the worker
+# leaves them unset. Plain POSIX sh, so the test can run it under busybox too.
 
-PATH=/esp-open-sdk/xtensa-lx106-elf/bin:$PATH
+WORKSPACE=${WORKSPACE:-/opt/workspace}
+SDK_DIR=${SDK_DIR:-/esp-open-sdk}
+MPY_DIR=${MPY_DIR:-/micropython}
 
-cd micropython/mpy-cross && make
+YMLFILE=$WORKSPACE/thinx.yml
+OUTDIR=$WORKSPACE/build
+OUTFILE=$OUTDIR/firmware.bin
+BOOT_MODULES="_boot.py flashbdev.py inisetup.py"
 
-# Parse thinx.yml config
+finish()
+{
+	finish_rc=$?
+	echo ""
+	if [ "$finish_rc" -eq 0 ]; then
+		echo "THiNX BUILD SUCCESSFUL."
+	else
+		rm -f "$OUTFILE" 2>/dev/null
+		echo "THiNX BUILD FAILED: $finish_rc"
+	fi
+}
 
-PLATFORM="esp8266"
+fail()
+{
+	echo "$*"
+	exit 1
+}
 
-if [[ -f "thinx.yml" ]]; then
-  echo "Reading thinx.yml"
-  thinx_yml_load thinx.yml
+# True when $1 is one of the boot modules or listed in micropython.modules.
+# The list is split into words with globbing off: an item is a name, never
+# a pattern.
+keep_module()
+{
+	set -f
+	for keep_word in $BOOT_MODULES $micropython_modules
+	do
+		if [ "$keep_word" = "$1" ]; then
+			set +f
+			return 0
+		fi
+	done
+	set +f
+	return 1
+}
 
-  if [[ ! -z ${micropython_platform} ]]; then
-    PLATFORM=${micropython_platform}
-  fi
+# Copies the *.py files of directory $1 into the port's modules directory.
+freeze_dir()
+{
+	for freeze_src in "$1"/*.py
+	do
+		[ -f "$freeze_src" ] || continue
+		freeze_name=${freeze_src##*/}
+		if [ -L "$freeze_src" ]; then
+			echo "Skipping ${freeze_name}: a symlink"
+			continue
+		fi
+		case ${freeze_name%.py} in
+			''|[!A-Za-z_]*|*[!A-Za-z0-9_]*)
+				echo "Skipping ${freeze_name}: not an importable module name"
+				continue ;;
+		esac
+		cp "$freeze_src" "$MODULES_DIR/$freeze_name"
+		echo "Freezing ${freeze_name}"
+	done
+}
+
+trap finish EXIT
+
+mkdir -p "$OUTDIR" 2>/dev/null || true
+[ -d "$OUTDIR" ] && [ -w "$OUTDIR" ] || fail "Cannot write to $OUTDIR."
+rm -f "$OUTFILE"
+
+unset micropython_platform micropython_modules
+PLATFORM=esp8266
+
+if [ -f "$YMLFILE" ]; then
+	echo "Reading thinx.yml"
+	thinx_yml_load "$YMLFILE"
+	if [ -n "${micropython_platform}" ]; then
+		PLATFORM=${micropython_platform}
+	fi
 fi
 
-cd micropython/$PLATFORM
+case $PLATFORM in
+	esp8266) ;;
+	*) fail "micropython.platform in thinx.yml is not supported: this image builds esp8266 only." ;;
+esac
 
-if [[ ! -z ${micropython_modules[@]} ]]; then
-  pushd modules
-  MODULES=$(ls -l *.py)
-  echo "- modules: ${micropython_modules[@]}"
-  for module in ${micropython_modules[@]} do
-    if [[ "module" == "_boot.py" ]]; then
-      break;
-    fi
-    if [[ $MODULES == "*${module}*"]]; then
-      echo "Enabling Micropython module ${module}"
-    else
-      echo "Disabling Micrphython module ${module}"
-      rm -rf ${module}
-    fi
-  done
-  popd
+PORT_DIR=$MPY_DIR/ports/$PLATFORM
+MODULES_DIR=$PORT_DIR/modules
+[ -d "$MODULES_DIR" ] || fail "No MicroPython $PLATFORM port at $PORT_DIR."
+
+TOOLCHAIN_BIN=$SDK_DIR/xtensa-lx106-elf/bin
+[ -x "$TOOLCHAIN_BIN/xtensa-lx106-elf-gcc" ] ||
+	fail "No xtensa-lx106-elf toolchain in $TOOLCHAIN_BIN: the image has to build esp-open-sdk (see Dockerfile)."
+PATH=$TOOLCHAIN_BIN:$PATH
+export PATH
+command -v python3 > /dev/null 2>&1 || fail "python3 is missing: MicroPython builds with it."
+command -v esptool > /dev/null 2>&1 || fail "esptool is missing: the esp8266 port needs it to create the image."
+
+if [ -n "${micropython_modules}" ]; then
+	for stock in "$MODULES_DIR"/*.py
+	do
+		[ -f "$stock" ] || continue
+		if keep_module "${stock##*/}"; then
+			echo "Keeping MicroPython module ${stock##*/}"
+		else
+			echo "Dropping MicroPython module ${stock##*/}"
+			rm -f "$stock"
+		fi
+	done
 fi
 
-# Will probably build both firmwares and builder.sh must choose based on thinx.yml on deployment...
-
-make axtls && make
-
-RESULT=$?
-
-echo ""
-
-# Report build status using logfile
-if [[ $RESULT == 0 ]]; then
-  echo "THiNX BUILD SUCCESSFUL."
-else
-  echo "THiNX BUILD FAILED: $?"
+freeze_dir "$WORKSPACE"
+if [ -d "$WORKSPACE/modules" ] && [ ! -L "$WORKSPACE/modules" ]; then
+	freeze_dir "$WORKSPACE/modules"
 fi
+
+echo "Building mpy-cross"
+make -C "$MPY_DIR/mpy-cross"
+
+echo "Building MicroPython for $PLATFORM"
+make -C "$PORT_DIR" BUILD=build-thinx
+
+FIRMWARE=$PORT_DIR/build-thinx/firmware.bin
+[ -f "$FIRMWARE" ] || fail "The build produced no $FIRMWARE."
+cp "$FIRMWARE" "$OUTFILE"
+echo "Firmware: $OUTFILE ($(wc -c < "$OUTFILE" | tr -d ' ') bytes)"
